@@ -1,0 +1,43 @@
+{
+  "algorithm": "hist_gradient_boosting",
+  "params": {
+    "learning_rate": 0.05,
+    "max_leaf_nodes": 31
+  },
+  "mlflow_run_id": "fe3f1e9d5f304a558db726647a8530cb",
+  "registered_model": "suspicious-login-classifier",
+  "model_version": 2,
+  "features": [
+    "hour",
+    "is_off_hours",
+    "is_weekend",
+    "is_failure",
+    "invalid_user_msg",
+    "is_scripted_agent",
+    "is_privileged_account",
+    "is_high_risk_country",
+    "bytes_sent_norm",
+    "session_duration_norm",
+    "user_fail_rate",
+    "user_country_share",
+    "ip_fail_count_log",
+    "criticality",
+    "internet_facing",
+    "cve_count",
+    "max_cvss",
+    "critical_cve_count",
+    "method_password",
+    "method_mfa",
+    "method_ssh_key",
+    "method_sso"
+  ],
+  "threshold": 0.5,
+  "metrics": {
+    "roc_auc": 0.9553,
+    "pr_auc": 0.8902,
+    "precision": 0.8904,
+    "recall": 0.7398,
+    "f1": 0.8081
+  },
+  "trained_at": "2026-09-27T21:22:41.574934+00:00"
+}

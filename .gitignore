@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+# generated data, models and tracking stores (re-created by the pipeline)
+data/raw/
+data/processed/
+data/warehouse.db
+mlflow.db
+mlruns/
+mlartifacts/
+models/*.joblib
+logs/*.log
+.env
+data/sample/*.json

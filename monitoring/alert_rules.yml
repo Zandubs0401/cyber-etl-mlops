@@ -1,0 +1,29 @@
+groups:
+  - name: model-api
+    rules:
+      - alert: ModelApiDown
+        expr: up{job="model-api"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Model API is not responding to Prometheus scrapes"}
+
+      - alert: HighPredictionErrorRate
+        expr: rate(model_prediction_errors_total[5m]) > 0.05
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Prediction requests are failing"}
+
+      - alert: SlowPredictions
+        expr: histogram_quantile(0.95, sum by (le) (rate(api_request_latency_seconds_bucket{endpoint="/predict"}[5m]))) > 0.5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "p95 /predict latency above 500 ms"}
+
+      - alert: SuspiciousRateShift
+        # Share of events flagged suspicious drifts far from the ~16% seen in training
+        expr: >
+          sum(rate(model_predictions_total{label="suspicious"}[1h]))
+          / sum(rate(model_predictions_total[1h])) > 0.40
+        for: 15m
+        labels: {severity: warning}
+        annotations: {summary: "Flag rate above 40% - possible attack wave or data drift; review and consider retraining"}

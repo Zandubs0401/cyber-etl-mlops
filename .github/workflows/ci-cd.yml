@@ -1,0 +1,90 @@
+# CI/CD for the ETL + MLOps pipeline
+#   1. test       - unit/integration tests on every push and pull request
+#   2. train      - rebuild features, retrain, enforce the ROC-AUC quality gate, keep the model as an artifact
+#   3. deploy     - on main only: build the serving image with the new model and push it to GitHub Container Registry
+name: ci-cd
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"   # weekly retrain every Monday 06:00 UTC
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  PYTHONPATH: src
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt ruff
+      - name: Lint
+        run: ruff check src tests dags --select E,F --ignore E501
+      - name: Tests
+        run: pytest -q
+
+  train:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run ETL + training (fails if the quality gate is not met)
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: python -m cyber_pipeline.pipeline --rows 100000
+      - name: Show model card
+        run: cat models/model.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: |
+            models/model.joblib
+            models/model.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-log
+          path: logs/pipeline.log
+
+  deploy:
+    needs: train
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: model
+          path: models
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push serving image
+        run: |
+          IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/model-api
+          docker build -t $IMAGE:${GITHUB_SHA::7} -t $IMAGE:latest .
+          docker push $IMAGE:${GITHUB_SHA::7}
+          docker push $IMAGE:latest
+      - name: Smoke test the image
+        run: |
+          IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/model-api
+          docker run -d -p 8000:8000 --name api $IMAGE:latest
+          for i in $(seq 1 20); do curl -sf localhost:8000/health && break; sleep 2; done
+          curl -sf localhost:8000/model-info

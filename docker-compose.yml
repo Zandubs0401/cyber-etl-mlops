@@ -1,0 +1,41 @@
+# Serving + monitoring stack:  docker compose up -d --build
+#   API        http://localhost:8000/docs
+#   MLflow UI  http://localhost:5000
+#   Prometheus http://localhost:9090
+#   Grafana    http://localhost:3000   (admin / admin)
+services:
+  api:
+    build: .
+    image: cyber-etl-mlops-api:latest
+    ports: ["8000:8000"]
+    volumes:
+      - ./models:/app/models:ro      # retrained models are picked up via POST /reload
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    command: mlflow ui --backend-store-uri sqlite:////mlflow/mlflow.db --host 0.0.0.0 --port 5000
+    ports: ["5000:5000"]
+    volumes:
+      - ./mlflow.db:/mlflow/mlflow.db
+      - ./mlruns:/mlruns
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports: ["9090:9090"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+    depends_on: [api]
+
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3000:3000"]
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
